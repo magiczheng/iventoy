@@ -1,21 +1,23 @@
 FROM alpine:latest
 
-# 安装运行时依赖
+# 安装必需依赖（含 glibc 兼容层 + GNU grep）
 RUN apk add --no-cache \
     bash \
     curl \
     util-linux \
     xorriso \
     grep \
+    libc6-compat \
+    gcompat \
     && rm -rf /var/cache/apk/*
 
-# 创建工作目录
 WORKDIR /opt/iventoy
 
-# 解压并去除顶层目录
+# 解压（不依赖顶层目录名）
 COPY iventoy.tar.gz /tmp/
-RUN tar -xzf /tmp/iventoy.tar.gz -C /opt/iventoy --strip-components=1 && \
-    rm /tmp/iventoy.tar.gz
+RUN tar -xzf /tmp/iventoy.tar.gz -C /tmp && \
+    mv /tmp/iventoy-*/* /opt/iventoy/ && \
+    rm -rf /tmp/iventoy-* /tmp/iventoy.tar.gz
 
 # 赋予执行权限
 RUN chmod +x /opt/iventoy/iventoy.sh && \
