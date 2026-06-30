@@ -1,0 +1,76 @@
+name: Build Docker Image from iVentoy Release
+
+on:
+  # 手动触发
+  workflow_dispatch:
+  # 可选：每天凌晨 4 点检查一次是否有新 Release
+  schedule:
+    - cron: '0 4 * * *'
+
+env:
+  # 在此指定要构建的版本号，也可以改为从 Release 自动获取
+  VENTOY_VERSION: v1.0.37
+  # 你的 Docker Hub 用户名 / 镜像名（请修改为实际值）
+  DOCKER_IMAGE: yourusername/iventoy
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+        # 如果使用 GitHub Container Registry，可改为：
+        # registry: ghcr.io
+        # username: ${{ github.actor }}
+        # password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get release asset URL
+        id: get_asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 从 GitHub API 获取指定 tag 的 release 信息
+          RELEASE_DATA=$(curl -s \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            https://api.github.com/repos/ventoy/PXE/releases/tags/${{ env.VENTOY_VERSION }})
+          
+          # 从 assets 中筛选出 linux-x86_64-free.tar.gz 的下载 URL
+          DOWNLOAD_URL=$(echo "$RELEASE_DATA" | jq -r \
+            '.assets[] | select(.name | test("linux-x86_64-free\\.tar\\.gz$")) | .browser_download_url')
+          
+          if [ -z "$DOWNLOAD_URL" ] || [ "$DOWNLOAD_URL" = "null" ]; then
+            echo "Error: No linux-x86_64-free asset found for version ${{ env.VENTOY_VERSION }}"
+            exit 1
+          fi
+          
+          echo "url=$DOWNLOAD_URL" >> $GITHUB_OUTPUT
+          echo "Found asset: $DOWNLOAD_URL"
+
+      - name: Download iVentoy tarball
+        run: |
+          curl -L -o iventoy.tar.gz "${{ steps.get_asset.outputs.url }}"
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ env.DOCKER_IMAGE }}:latest
+            ${{ env.DOCKER_IMAGE }}:${{ env.VENTOY_VERSION }}
+          file: Dockerfile
