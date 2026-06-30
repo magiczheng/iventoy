@@ -8,7 +8,7 @@ on:
 env:
   VENTOY_VERSION: v1.0.37
   # 请将下面镜像名改为你自己的 Docker Hub 用户名/镜像名
-  DOCKER_IMAGE: yourusername/iventoy
+  DOCKER_IMAGE: zhengyd0720/iventoy
 
 jobs:
   build:
